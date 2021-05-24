@@ -1,0 +1,28 @@
+{
+  "name": "skylark-jsbin-runner",
+  "description": "A version of jsbin-runner  that ported to running on skylarkjs.",
+  "version": "0.9.0",
+  "keywords": [
+    "jsbin-runner",
+    "playground"
+  ],
+  "homepage": "https://github.com/skylark-integration/skylark-jsbin-runner/",
+  "author": "Hudaokeji, Inc.",
+  "scripts": {
+    "build": "slib build ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/skylark-integration/skylark-jsbin-runner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/skylark-integration/skylark-jsbin-runner/issues"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "skylark-langx-ns": "git+https://github.com/skylark-langx/skylark-langx-ns.git#master"
+  },
+  "engines": {
+    "node": ">=0.10.1"
+  }
+}
