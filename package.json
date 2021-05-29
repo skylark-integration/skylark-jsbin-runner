@@ -20,7 +20,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "skylark-langx-ns": "git+https://github.com/skylark-langx/skylark-langx-ns.git#master"
+    "skylark-langx-ns": "git+https://github.com/skylark-langx/skylark-langx-ns.git#master",
+    "skylark-loopprotect": "git+https://github.com/skylark-integration/skylark-loopprotect.git"
   },
   "engines": {
     "node": ">=0.10.1"

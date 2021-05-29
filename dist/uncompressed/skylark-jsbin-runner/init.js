@@ -3,6 +3,7 @@ define([
   "./utils",
   "./sandbox",
 ],function(runner,utils,sandbox){
+    'use strict';
 
 
   /** =========================================================================

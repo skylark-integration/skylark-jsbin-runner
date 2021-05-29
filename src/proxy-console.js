@@ -1,6 +1,7 @@
 define([
    "./runner"
 ],function (runner) {
+    'use strict';
   /** =========================================================================
    * Console
    * Proxy console.logs out to the parent window
@@ -27,7 +28,7 @@ define([
         if (typeof arg === 'undefined') {
           newArgs.push('undefined');
         } else {
-          newArgs.push(stringify(arg));
+          newArgs.push(JSON.stringify(arg));  // stringify => JSON.stringify
         }
       }
       return newArgs;

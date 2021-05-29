@@ -1,6 +1,7 @@
 define([
+   "skylark-loopprotect",
    "./jsbin"
-],function (jsbin) {
+],function (loopProtect,jsbin) {
   /** ============================================================================
    * JS Bin Runner
    * Accepts incoming postMessage events and updates a live iframe accordingly.

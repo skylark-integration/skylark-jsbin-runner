@@ -2,6 +2,7 @@ define([
    "./runner",
    "./utils"
 ],function (runner,utils) {
+    'use strict';
   /** ============================================================================
    * Sandbox
    * Handles creating and insertion of dynamic iframes

@@ -1,6 +1,7 @@
 define([
    "./runner"
 ],function (runner) {
+    'use strict';
   /**
    * Utilities & polyfills
    */

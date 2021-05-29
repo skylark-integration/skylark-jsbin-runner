@@ -1,8 +1,9 @@
 define([
+   "skylark-loopprotect",
    "./runner",
    "./utils",
    "./sandbox"
-],function (runner,utils,sandbox) {
+],function (loopProtect,runner,utils,sandbox) {
   /** ============================================================================
    * JS Bin Runner
    * Accepts incoming postMessage events and updates a live iframe accordingly.
@@ -41,6 +42,9 @@ define([
 
 
         // Process the source according to the options passed in
+        if (!data.source && data.codes) { // added by lwf
+          data.source = processor.prepare(data.codes);
+        }
         var source = processor.render(data.source, data.options);
 
         // Start writing the page. This will clear any existing document.
@@ -64,7 +68,7 @@ define([
         childWindow.console = proxyConsole;
 
         // Reset the loop protection before rendering
-        loopProtect.reset();
+        loopProtect.reset(); //TODO:
 
         // if there's a parse error this will fire
         childWindow.onerror = function (msg, url, line, col, error) {
