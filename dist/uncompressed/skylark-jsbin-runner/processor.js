@@ -136,7 +136,7 @@ define([
 
       var parts = [],
           html = codes.html,
-          js = !nojs ? codes.javascript : '',
+          js = codes.javascript || '',
           css = codes.css,
           close = '',
           hasHTML = !!html.trim().length,
@@ -192,9 +192,10 @@ define([
           close = parts.length === 2 && parts[1] ? parts[1] : '';
         }
 
-        var type = jsbin.panels.named.javascript.type ? ' type="text/' + jsbin.panels.named.javascript.type + '"' : '';
-
-        js += '\n\n//# sourceURL=' + jsbin.state.code + '.js';
+        // TODO
+        ///var type = jsbin.panels.named.javascript.type ? ' type="text/' + jsbin.panels.named.javascript.type + '"' : '';
+        /// js += '\n\n//# sourceURL=' + jsbin.state.code + '.js';
+        var type = "text/script";
 
         html += '<script' + type + '>' + js + '\n</script>\n' + close;
       }
@@ -239,9 +240,9 @@ define([
         }
 
         // if the focused panel is CSS, then just return the css NOW
-        if (jsbin.state.hasBody && jsbin.panels.focused.id === 'css') {
-          return css;
-        }
+        ///if (jsbin.state.hasBody && jsbin.panels.focused.id === 'css') {
+        ///  return css;
+        ///}
 
         html += '<style id="jsbin-css">\n' + css + '\n</style>\n' + close;
       }
@@ -250,15 +251,15 @@ define([
       // This is because IE runs scripts as it loads them, so variables that
       // scripts like jQuery add to the global scope are undefined.
       // See http://jsbin.com/ijapom/5
-      if (jsbin.ie && re.scriptopen.test(html)) {
-        html = html.replace(/<script(.*?)>/gi, function (all, match) {
-          if (match.indexOf('src') !== -1) {
-            return all;
-          } else {
-            return '<script defer' + match + '>';
-          }
-        });
-      }
+      ///if (jsbin.ie && re.scriptopen.test(html)) {
+      ///  html = html.replace(/<script(.*?)>/gi, function (all, match) {
+      ///    if (match.indexOf('src') !== -1) {
+      ///      return all;
+      ///    } else {
+      ///      return '<script defer' + match + '>';
+      ///    }
+      ///  });
+      ///}
 
       return html;
     };

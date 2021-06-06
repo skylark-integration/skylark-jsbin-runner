@@ -2,8 +2,10 @@ define([
    "skylark-loopprotect",
    "./runner",
    "./utils",
-   "./sandbox"
-],function (loopProtect,runner,utils,sandbox) {
+   "./proxy-console",
+   "./sandbox",
+   "./processor"
+],function (loopProtect,runner,utils,proxyConsole,sandbox,processor) {
   /** ============================================================================
    * JS Bin Runner
    * Accepts incoming postMessage events and updates a live iframe accordingly.

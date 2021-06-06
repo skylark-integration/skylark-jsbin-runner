@@ -227,10 +227,94 @@ define('skylark-jsbin-runner/utils',[
     getIframeWindow
   }
 });
+define('skylark-jsbin-runner/proxy-console',[
+   "./runner"
+],function (runner) {
+    'use strict';
+  /** =========================================================================
+   * Console
+   * Proxy console.logs out to the parent window
+   * ========================================================================== */
+
+  var proxyConsole = (function () {
+    'use strict';
+    /*global stringify, runner*/
+    var supportsConsole = true;
+    try { window.console.log('d[ o_0 ]b'); } catch (e) { supportsConsole = false; }
+
+    var proxyConsole = function() {};
+
+    /**
+     * Stringify all of the console objects from an array for proxying
+     */
+    var stringifyArgs = function (args) {
+      var newArgs = [];
+      // TODO this was forEach but when the array is [undefined] it wouldn't
+      // iterate over them
+      var i = 0, length = args.length, arg;
+      for(; i < length; i++) {
+        arg = args[i];
+        if (typeof arg === 'undefined') {
+          newArgs.push('undefined');
+        } else {
+          newArgs.push(JSON.stringify(arg));  // stringify => JSON.stringify
+        }
+      }
+      return newArgs;
+    };
+
+    // Create each of these methods on the proxy, and postMessage up to JS Bin
+    // when one is called.
+    var methods = proxyConsole.prototype.methods = [
+      'debug', 'clear', 'error', 'info', 'log', 'warn', 'dir', 'props', '_raw',
+      'group', 'groupEnd', 'dirxml', 'table', 'trace', 'assert', 'count',
+      'markTimeline', 'profile', 'profileEnd', 'time', 'timeEnd', 'timeStamp',
+      'groupCollapsed'
+    ];
+
+    methods.forEach(function (method) {
+      // Create console method
+      proxyConsole.prototype[method] = function () {
+        // Replace args that can't be sent through postMessage
+        var originalArgs = [].slice.call(arguments),
+            args = stringifyArgs(originalArgs);
+
+        // Post up with method and the arguments
+        runner.postMessage('console', {
+          method: method === '_raw' ? originalArgs.shift() : method,
+          args: method === '_raw' ? args.slice(1) : args
+        });
+
+        // If the browner supports it, use the browser console but ignore _raw,
+        // as _raw should only go to the proxy console.
+        // Ignore clear if it doesn't exist as it's beahviour is different than
+        // log and we let it fallback to jsconsole for the panel and to nothing
+        // for the browser console
+        if (window.console) {
+          if (!console[method]) {
+            method = 'log';
+          }
+
+          if (window.console && method !== '_raw') {
+            if (method !== 'clear' || (method === 'clear' && console.clear)) {
+              console[method].apply(console, originalArgs);
+            }
+          }
+        }
+      };
+    });
+
+    return new proxyConsole();
+
+  }());
+
+  return runner.proxyConsole = proxyConsole;
+});
 define('skylark-jsbin-runner/sandbox',[
    "./runner",
-   "./utils"
-],function (runner,utils) {
+   "./utils",
+   "./proxy-console"
+],function (runner,utils,proxyConsole) {
     'use strict';
   /** ============================================================================
    * Sandbox
@@ -429,132 +513,6 @@ define('skylark-jsbin-runner/sandbox',[
     return runner.sandbox = sandbox;
 
 });
-define('skylark-jsbin-runner/commands',[
-   "skylark-loopprotect",
-   "./runner",
-   "./utils",
-   "./sandbox"
-],function (loopProtect,runner,utils,sandbox) {
-  /** ============================================================================
-   * JS Bin Runner
-   * Accepts incoming postMessage events and updates a live iframe accordingly.
-   * ========================================================================== */
-  /*globals sandbox loopProtect window alert */
-    'use strict';
-
-    var commands = {};
-
-    /**
-     * Render a new preview iframe using the posted source
-     */
-    commands.render = function (data) {
-      // if we're just changing CSS, let's try to inject the change
-      // instead of doing a full render
-      if (data.options.injectCSS) {
-        if (sandbox.active) {
-          var style = sandbox.active.contentDocument.getElementById('jsbin-css');
-          if (style) {
-            style.innerHTML = data.source;
-            return;
-          }
-        }
-      }
-
-      var iframe = sandbox.create(data.options);
-      sandbox.use(iframe, function () {
-        var childDoc = iframe.contentDocument,
-            childWindow = utils.getIframeWindow(iframe);
-        if (!childDoc) childDoc = childWindow.document;
-
-        // Reset the console to the prototype state
-        proxyConsole.methods.forEach(function (method) {
-          delete proxyConsole[method];
-        });
-
-
-        // Process the source according to the options passed in
-        if (!data.source && data.codes) { // added by lwf
-          data.source = processor.prepare(data.codes);
-        }
-        var source = processor.render(data.source, data.options);
-
-        // Start writing the page. This will clear any existing document.
-        childDoc.open();
-
-        // We need to write a blank line first – Firefox blows away things you add
-        // to the child window when you do the fist document.write.
-        // Note that each document.write fires a DOMContentLoaded in Firefox.
-        // This method exhibits synchronous and asynchronous behaviour, depending
-        // on the browser. Urg.
-        childDoc.write('');
-
-        // Give the child a reference to things it needs. This has to go here so
-        // that the user's code (that runs as a result of the following
-        // childDoc.write) can access the objects.
-        childWindow.runnerWindow = {
-          proxyConsole: proxyConsole,
-          protect: loopProtect,
-        };
-
-        childWindow.console = proxyConsole;
-
-        // Reset the loop protection before rendering
-        loopProtect.reset(); //TODO:
-
-        // if there's a parse error this will fire
-        childWindow.onerror = function (msg, url, line, col, error) {
-          // show an error on the jsbin console, but not the browser console
-          // (i.e. use _raw), because the browser will throw the native error
-          // which (hopefully) includes a link to the JavaScript VM at that time.
-          proxyConsole._raw('error', error && error.stack ? error.stack : msg + ' (line ' + line + ')');
-        };
-
-        // Write the source out. IE crashes if you have lots of these, so that's
-        // why the source is rendered above (processor.render) – it should be one
-        // string. IE's a sensitive soul.
-        childDoc.write(source);
-        // childDoc.documentElement.innerHTML = source;
-
-        // Close the document. This will fire another DOMContentLoaded.
-        childDoc.close();
-
-        runner.postMessage('complete');
-
-        // Setup the new window
-        sandbox.wrap(childWindow, data.options);
-      });
-    };
-
-    /**
-     * Run console commands against the iframe's scope
-     */
-    commands['console:run'] = function (cmd) {
-      sandbox.eval(cmd);
-    };
-
-    /**
-     * Load script into the apge
-     */
-    commands['console:load:script'] = function (url) {
-      sandbox.injectScript(url, function (err) {
-        if (err) return runner.postMessage('console:load:script:error', err);
-        runner.postMessage('console:load:script:success', url);
-      });
-    };
-
-    /**
-     * Load DOM into the apge
-     */
-    commands['console:load:dom'] = function (html) {
-      sandbox.injectDOM(html, function (err) {
-        if (err) return runner.postMessage('console:load:dom:error', err);
-        runner.postMessage('console:load:dom:success');
-      });
-    };
-
-    return runner.commands = commands;
-
-});
 define('skylark-jsbin-runner/processor',[
    "skylark-loopprotect",
    "./runner"
@@ -693,7 +651,7 @@ define('skylark-jsbin-runner/processor',[
 
       var parts = [],
           html = codes.html,
-          js = !nojs ? codes.javascript : '',
+          js = codes.javascript || '',
           css = codes.css,
           close = '',
           hasHTML = !!html.trim().length,
@@ -749,9 +707,10 @@ define('skylark-jsbin-runner/processor',[
           close = parts.length === 2 && parts[1] ? parts[1] : '';
         }
 
-        var type = jsbin.panels.named.javascript.type ? ' type="text/' + jsbin.panels.named.javascript.type + '"' : '';
-
-        js += '\n\n//# sourceURL=' + jsbin.state.code + '.js';
+        // TODO
+        ///var type = jsbin.panels.named.javascript.type ? ' type="text/' + jsbin.panels.named.javascript.type + '"' : '';
+        /// js += '\n\n//# sourceURL=' + jsbin.state.code + '.js';
+        var type = "text/script";
 
         html += '<script' + type + '>' + js + '\n</script>\n' + close;
       }
@@ -796,9 +755,9 @@ define('skylark-jsbin-runner/processor',[
         }
 
         // if the focused panel is CSS, then just return the css NOW
-        if (jsbin.state.hasBody && jsbin.panels.focused.id === 'css') {
-          return css;
-        }
+        ///if (jsbin.state.hasBody && jsbin.panels.focused.id === 'css') {
+        ///  return css;
+        ///}
 
         html += '<style id="jsbin-css">\n' + css + '\n</style>\n' + close;
       }
@@ -807,15 +766,15 @@ define('skylark-jsbin-runner/processor',[
       // This is because IE runs scripts as it loads them, so variables that
       // scripts like jQuery add to the global scope are undefined.
       // See http://jsbin.com/ijapom/5
-      if (jsbin.ie && re.scriptopen.test(html)) {
-        html = html.replace(/<script(.*?)>/gi, function (all, match) {
-          if (match.indexOf('src') !== -1) {
-            return all;
-          } else {
-            return '<script defer' + match + '>';
-          }
-        });
-      }
+      ///if (jsbin.ie && re.scriptopen.test(html)) {
+      ///  html = html.replace(/<script(.*?)>/gi, function (all, match) {
+      ///    if (match.indexOf('src') !== -1) {
+      ///      return all;
+      ///    } else {
+      ///      return '<script defer' + match + '>';
+      ///    }
+      ///  });
+      ///}
 
       return html;
     };
@@ -824,88 +783,133 @@ define('skylark-jsbin-runner/processor',[
 
 });
 
-define('skylark-jsbin-runner/proxy-console',[
-   "./runner"
-],function (runner) {
-    'use strict';
-  /** =========================================================================
-   * Console
-   * Proxy console.logs out to the parent window
+define('skylark-jsbin-runner/commands',[
+   "skylark-loopprotect",
+   "./runner",
+   "./utils",
+   "./proxy-console",
+   "./sandbox",
+   "./processor"
+],function (loopProtect,runner,utils,proxyConsole,sandbox,processor) {
+  /** ============================================================================
+   * JS Bin Runner
+   * Accepts incoming postMessage events and updates a live iframe accordingly.
    * ========================================================================== */
-
-  var proxyConsole = (function () {
+  /*globals sandbox loopProtect window alert */
     'use strict';
-    /*global stringify, runner*/
-    var supportsConsole = true;
-    try { window.console.log('d[ o_0 ]b'); } catch (e) { supportsConsole = false; }
 
-    var proxyConsole = function() {};
+    var commands = {};
 
     /**
-     * Stringify all of the console objects from an array for proxying
+     * Render a new preview iframe using the posted source
      */
-    var stringifyArgs = function (args) {
-      var newArgs = [];
-      // TODO this was forEach but when the array is [undefined] it wouldn't
-      // iterate over them
-      var i = 0, length = args.length, arg;
-      for(; i < length; i++) {
-        arg = args[i];
-        if (typeof arg === 'undefined') {
-          newArgs.push('undefined');
-        } else {
-          newArgs.push(JSON.stringify(arg));  // stringify => JSON.stringify
+    commands.render = function (data) {
+      // if we're just changing CSS, let's try to inject the change
+      // instead of doing a full render
+      if (data.options.injectCSS) {
+        if (sandbox.active) {
+          var style = sandbox.active.contentDocument.getElementById('jsbin-css');
+          if (style) {
+            style.innerHTML = data.source;
+            return;
+          }
         }
       }
-      return newArgs;
-    };
 
-    // Create each of these methods on the proxy, and postMessage up to JS Bin
-    // when one is called.
-    var methods = proxyConsole.prototype.methods = [
-      'debug', 'clear', 'error', 'info', 'log', 'warn', 'dir', 'props', '_raw',
-      'group', 'groupEnd', 'dirxml', 'table', 'trace', 'assert', 'count',
-      'markTimeline', 'profile', 'profileEnd', 'time', 'timeEnd', 'timeStamp',
-      'groupCollapsed'
-    ];
+      var iframe = sandbox.create(data.options);
+      sandbox.use(iframe, function () {
+        var childDoc = iframe.contentDocument,
+            childWindow = utils.getIframeWindow(iframe);
+        if (!childDoc) childDoc = childWindow.document;
 
-    methods.forEach(function (method) {
-      // Create console method
-      proxyConsole.prototype[method] = function () {
-        // Replace args that can't be sent through postMessage
-        var originalArgs = [].slice.call(arguments),
-            args = stringifyArgs(originalArgs);
-
-        // Post up with method and the arguments
-        runner.postMessage('console', {
-          method: method === '_raw' ? originalArgs.shift() : method,
-          args: method === '_raw' ? args.slice(1) : args
+        // Reset the console to the prototype state
+        proxyConsole.methods.forEach(function (method) {
+          delete proxyConsole[method];
         });
 
-        // If the browner supports it, use the browser console but ignore _raw,
-        // as _raw should only go to the proxy console.
-        // Ignore clear if it doesn't exist as it's beahviour is different than
-        // log and we let it fallback to jsconsole for the panel and to nothing
-        // for the browser console
-        if (window.console) {
-          if (!console[method]) {
-            method = 'log';
-          }
 
-          if (window.console && method !== '_raw') {
-            if (method !== 'clear' || (method === 'clear' && console.clear)) {
-              console[method].apply(console, originalArgs);
-            }
-          }
+        // Process the source according to the options passed in
+        if (!data.source && data.codes) { // added by lwf
+          data.source = processor.prepare(data.codes);
         }
-      };
-    });
+        var source = processor.render(data.source, data.options);
 
-    return new proxyConsole();
+        // Start writing the page. This will clear any existing document.
+        childDoc.open();
 
-  }());
+        // We need to write a blank line first – Firefox blows away things you add
+        // to the child window when you do the fist document.write.
+        // Note that each document.write fires a DOMContentLoaded in Firefox.
+        // This method exhibits synchronous and asynchronous behaviour, depending
+        // on the browser. Urg.
+        childDoc.write('');
 
-  return runner.proxyConsole = proxyConsole;
+        // Give the child a reference to things it needs. This has to go here so
+        // that the user's code (that runs as a result of the following
+        // childDoc.write) can access the objects.
+        childWindow.runnerWindow = {
+          proxyConsole: proxyConsole,
+          protect: loopProtect,
+        };
+
+        childWindow.console = proxyConsole;
+
+        // Reset the loop protection before rendering
+        loopProtect.reset(); //TODO:
+
+        // if there's a parse error this will fire
+        childWindow.onerror = function (msg, url, line, col, error) {
+          // show an error on the jsbin console, but not the browser console
+          // (i.e. use _raw), because the browser will throw the native error
+          // which (hopefully) includes a link to the JavaScript VM at that time.
+          proxyConsole._raw('error', error && error.stack ? error.stack : msg + ' (line ' + line + ')');
+        };
+
+        // Write the source out. IE crashes if you have lots of these, so that's
+        // why the source is rendered above (processor.render) – it should be one
+        // string. IE's a sensitive soul.
+        childDoc.write(source);
+        // childDoc.documentElement.innerHTML = source;
+
+        // Close the document. This will fire another DOMContentLoaded.
+        childDoc.close();
+
+        runner.postMessage('complete');
+
+        // Setup the new window
+        sandbox.wrap(childWindow, data.options);
+      });
+    };
+
+    /**
+     * Run console commands against the iframe's scope
+     */
+    commands['console:run'] = function (cmd) {
+      sandbox.eval(cmd);
+    };
+
+    /**
+     * Load script into the apge
+     */
+    commands['console:load:script'] = function (url) {
+      sandbox.injectScript(url, function (err) {
+        if (err) return runner.postMessage('console:load:script:error', err);
+        runner.postMessage('console:load:script:success', url);
+      });
+    };
+
+    /**
+     * Load DOM into the apge
+     */
+    commands['console:load:dom'] = function (html) {
+      sandbox.injectDOM(html, function (err) {
+        if (err) return runner.postMessage('console:load:dom:error', err);
+        runner.postMessage('console:load:dom:success');
+      });
+    };
+
+    return runner.commands = commands;
+
 });
 define('skylark-jsbin-runner/init',[
   "./runner",

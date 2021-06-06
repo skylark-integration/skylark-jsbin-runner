@@ -1,7 +1,8 @@
 define([
    "./runner",
-   "./utils"
-],function (runner,utils) {
+   "./utils",
+   "./proxy-console"
+],function (runner,utils,proxyConsole) {
     'use strict';
   /** ============================================================================
    * Sandbox
