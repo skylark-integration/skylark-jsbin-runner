@@ -810,7 +810,8 @@ define('skylark-jsbin-runner/commands',[
         if (sandbox.active) {
           var style = sandbox.active.contentDocument.getElementById('jsbin-css');
           if (style) {
-            style.innerHTML = data.source;
+            ///style.innerHTML = data.source; // lwf
+            style.innerHTML = data.source || (data.codes && data.codes.css);
             return;
           }
         }
