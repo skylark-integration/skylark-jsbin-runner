@@ -1,30 +1,28 @@
 define([
+   "skylark-loopprotect",
+   "skylark-domx-plugins-sandboxs/sandbox",
    "./runner",
    "./utils",
-   "./proxy-console"
-],function (runner,utils,proxyConsole) {
+   "./proxy-console",
+   "./processor"
+],function (loopProtect,Sandbox,runner,utils,proxyConsole,processor) {
     'use strict';
   /** ============================================================================
    * Sandbox
    * Handles creating and insertion of dynamic iframes
    * ========================================================================== */
-
-  /*globals window document */
+   /*
 
     var sandbox = {};
 
-    /**
-     * Save the target container element, plus the old and active iframes.
-     */
+
     sandbox.target = null;
     sandbox.old = null;
     sandbox.active = null;
     sandbox.state = {};
     sandbox.guid = +new Date(); // id used to keep track of which iframe is active
 
-    /**
-     * Create a new sandboxed iframe.
-     */
+
     sandbox.create = function () {
       var iframe = document.createElement('iframe');
       // iframe.src = window.location.origin + '/runner-inner';
@@ -36,16 +34,6 @@ define([
       return iframe;
     };
 
-    /**
-     * Add a new iframe to the page and wait until it has loaded to call the
-     * requester back. Also wait until the new iframe has loaded before removing
-     * the old one.
-     */
-    /**
-     * Add a new iframe to the page and wait until it has loaded to call the
-     * requester back. Also wait until the new iframe has loaded before removing
-     * the old one.
-     */
     sandbox.use = function (iframe, done) {
       if (!sandbox.target) {
         throw new Error('Sandbox has no target element.');
@@ -78,9 +66,7 @@ define([
       }, 0);
     };
 
-    /**
-     * Restore the state of a prvious iframe, like scroll position.
-     */
+
     sandbox.restoreState = function (iframe, state) {
       if (!iframe) return {};
       var win = utils.getIframeWindow(iframe);
@@ -90,9 +76,7 @@ define([
       }
     };
 
-    /**
-     * Save the state of an iframe, like scroll position.
-     */
+
     sandbox.saveState = function (iframe) {
       if (!iframe) return {};
       var win = utils.getIframeWindow(iframe);
@@ -105,10 +89,7 @@ define([
       };
     };
 
-    /**
-     * Attach event listeners and rpevent some default behaviour on the new
-     * window during live rendering.
-     */
+
     sandbox.wrap = function (childWindow, options) {
       if (!childWindow) return;
       options = options || {};
@@ -136,10 +117,7 @@ define([
       };
     };
 
-    /**
-     * Evaluate a command against the active iframe, then use the proxy console
-     * to fire information up to the parent
-     */
+
     sandbox.eval = function (cmd) {
       if (!sandbox.active) throw new Error("sandbox.eval: has no active iframe.");
 
@@ -165,9 +143,7 @@ define([
       return proxyConsole[type](output);
     };
 
-    /**
-     * Inject a script via a URL into the page
-     */
+
     sandbox.injectScript = function (url, cb) {
       if (!sandbox.active) throw new Error("sandbox.injectScript: has no active iframe.");
       var childWindow = sandbox.active.contentWindow,
@@ -183,9 +159,7 @@ define([
       childDocument.body.appendChild(script);
     };
 
-    /**
-     * Inject full DOM into the page
-     */
+
     sandbox.injectDOM = function (html, cb) {
       if (!sandbox.active) throw new Error("sandbox.injectDOM: has no active iframe.");
       var childWindow = sandbox.active.contentWindow,
@@ -198,6 +172,140 @@ define([
       cb();
     };
 
-    return runner.sandbox = sandbox;
+    */
+
+    var _sandbox;
+
+
+
+    return runner.sandbox = {
+      init : function(el) {
+        _sandbox = new Sandbox(el,{
+          cssTextTagId : 'jsbin-css'
+        });
+      },
+
+      /**
+       * Render a new preview iframe using the posted source
+       */
+      render : function (data) {
+        /*
+        // if we're just changing CSS, let's try to inject the change
+        // instead of doing a full render
+        if (data.options.injectCSS) {
+          if (sandbox.active) {
+            var style = sandbox.active.contentDocument.getElementById('jsbin-css');
+            if (style) {
+              ///style.innerHTML = data.source; // lwf
+              style.innerHTML = data.source || (data.codes && data.codes.css);
+              return;
+            }
+          }
+        }
+
+        var iframe = sandbox.create(data.options);
+        sandbox.use(iframe, function () {
+          var childDoc = iframe.contentDocument,
+              childWindow = utils.getIframeWindow(iframe);
+          if (!childDoc) childDoc = childWindow.document;
+
+          // Reset the console to the prototype state
+          proxyConsole.methods.forEach(function (method) {
+            delete proxyConsole[method];
+          });
+
+
+          // Process the source according to the options passed in
+          if (!data.source && data.codes) { // added by lwf
+            data.source = processor.prepare(data.codes);
+          }
+          var source = processor.render(data.source, data.options);
+
+          // Start writing the page. This will clear any existing document.
+          childDoc.open();
+
+          // We need to write a blank line first – Firefox blows away things you add
+          // to the child window when you do the fist document.write.
+          // Note that each document.write fires a DOMContentLoaded in Firefox.
+          // This method exhibits synchronous and asynchronous behaviour, depending
+          // on the browser. Urg.
+          childDoc.write('');
+
+          // Give the child a reference to things it needs. This has to go here so
+          // that the user's code (that runs as a result of the following
+          // childDoc.write) can access the objects.
+          childWindow.runnerWindow = {
+            proxyConsole: proxyConsole,
+            protect: loopProtect,
+          };
+
+          childWindow.console = proxyConsole;
+
+          // Reset the loop protection before rendering
+          loopProtect.reset(); //TODO:
+
+          // if there's a parse error this will fire
+          childWindow.onerror = function (msg, url, line, col, error) {
+            // show an error on the jsbin console, but not the browser console
+            // (i.e. use _raw), because the browser will throw the native error
+            // which (hopefully) includes a link to the JavaScript VM at that time.
+            proxyConsole._raw('error', error && error.stack ? error.stack : msg + ' (line ' + line + ')');
+          };
+
+          // Write the source out. IE crashes if you have lots of these, so that's
+          // why the source is rendered above (processor.render) – it should be one
+          // string. IE's a sensitive soul.
+          childDoc.write(source);
+          // childDoc.documentElement.innerHTML = source;
+
+          // Close the document. This will fire another DOMContentLoaded.
+          childDoc.close();
+
+          runner.postMessage('complete');
+
+          // Setup the new window
+          sandbox.wrap(childWindow, data.options);
+        });
+        */
+
+        // Reset the loop protection before rendering
+        loopProtect.reset(); //TODO:
+
+        // Process the source according to the options passed in
+        if (!data.source && data.codes) { // added by lwf
+          data.source = processor.prepare(data.codes);
+        }
+        var source = processor.render(data.source, data.options);
+
+        data.options.proxyConsole = proxyConsole;
+        data.options.loopProtect = loopProtect;
+
+        _sandbox.render(source,data.options);
+
+        runner.postMessage('complete');
+
+      },
+
+      injectScript : function (url, cb) {
+        return _sandbox.injectScript(url,cb);
+      },
+
+      injectDOM : function (html, cb)  {
+        return _sandbox.injectDOM(html,cb);
+      },
+      
+      injectCssText : function(cssText) {
+        return _sandbox.injectCssText(cssText);
+      },
+      
+      eval : function(cmd){
+        return _sandbox.eval(cmd);
+      },
+
+      isActive : function() {
+        return !!_sandbox.active;
+      }
+
+    };
 
 });

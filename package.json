@@ -20,6 +20,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "skylark-domx-plugins-sandboxs": "git+https://github.com/skylark-domx-plugins/skylark-domx-plugins-sandboxs.git",
     "skylark-langx-ns": "git+https://github.com/skylark-langx/skylark-langx-ns.git#master",
     "skylark-loopprotect": "git+https://github.com/skylark-integration/skylark-loopprotect.git"
   },

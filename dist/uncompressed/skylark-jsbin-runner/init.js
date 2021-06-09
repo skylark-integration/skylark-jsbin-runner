@@ -34,7 +34,8 @@ define([
        */
 
       // Set the sandbox target
-      sandbox.target = document.getElementById('sandbox-wrapper');
+      ///sandbox.target = document.getElementById('sandbox-wrapper');
+      sandbox.init(document.getElementById('sandbox-wrapper'));
       // Hook into postMessage
       utils.addEvent(window, 'message', runner.handleMessage);
 
