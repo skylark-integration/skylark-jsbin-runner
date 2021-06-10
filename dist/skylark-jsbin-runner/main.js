@@ -5,5 +5,5 @@
  * @link https://github.com/skylark-integration/skylark-jsbin-runner/
  * @license MIT
  */
-define(["./runner","./commands","./processor","./proxy-console","./runner","./sandbox","./utils","./init"],function(n){return n});
+define(["./runner"],function(n){return n});
 //# sourceMappingURL=sourcemaps/main.js.map

@@ -1,12 +1,5 @@
 define([
-	"./runner",
-	"./commands",
-	"./processor",
-	"./proxy-console",
-	"./runner",
-	"./sandbox",
-	"./utils",
-	"./init"
+	"./runner"
 ],function(runner){
 	return runner;
 });
